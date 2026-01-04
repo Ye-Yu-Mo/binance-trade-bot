@@ -11,8 +11,8 @@ class Strategy(AutoTrader):
         super().initialize()
         self.initialize_current_coin()
         self.entry_prices = {}  # 记录买入价格
-        self.stop_loss_pct = 8.0  # 止损8%（加密货币波动大，设置宽松一点）
-        self.take_profit_pct = 20.0  # 止盈20%
+        self.stop_loss_pct = 8.0  # 止损8%
+        self.take_profit_pct = 12.0  # 止盈12%（降低盈亏平衡胜率从71%到40%）
         self.logger.info(f"风险管理策略已启动 - 止损:{self.stop_loss_pct}%, 止盈:{self.take_profit_pct}%")
 
     def scout(self):
@@ -54,10 +54,11 @@ class Strategy(AutoTrader):
                 f"💰 触发止盈！{current_coin.symbol} 盈利 {pnl_pct:.2f}%, "
                 f"入场价 {entry_price:.8f}, 当前价 {current_price:.8f}"
             )
-            # 止盈后执行正常的跳转逻辑，寻找更好的币种
-            self._jump_to_best_coin(current_coin, current_price)
-            # 删除入场价，重置风险管理基准（即使跳转失败，也避免无限循环）
-            self.entry_prices.pop(current_coin.symbol, None)
+            # 卖出回USDT，锁定利润（不跳转到其他币，避免"从一个火坑跳到另一个火坑"）
+            result = self.manager.sell_alt(current_coin, self.config.BRIDGE)
+            if result:
+                self.entry_prices.pop(current_coin.symbol, None)
+                self.logger.info("止盈后回到USDT，等待下次扫描寻找新机会")
             return
 
         # 正常侦察（只有在未触发止损/止盈时才执行）
