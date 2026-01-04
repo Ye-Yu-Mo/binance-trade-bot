@@ -34,7 +34,7 @@ def main():
     # 配置回测参数
     config = Config()
     # 回测时强制使用新策略，避免污染全局配置
-    config.STRATEGY = "atr_trailing"
+    # config.STRATEGY = "atr_trailing"
 
     # 确保DOGE在支持列表中
     if 'DOGE' not in config.SUPPORTED_COIN_LIST:
@@ -61,6 +61,12 @@ def main():
     trade_count = 0
     balance_changes = []
     last_balances = None
+
+    # 新增：详细交易记录
+    trade_details = []
+    stop_loss_count = 0
+    take_profit_count = 0
+    other_trades = 0
 
     print("\n[开始回测] 正在加载历史数据...")
     print("(首次运行需要下载数据，可能需要几分钟...)\n")
@@ -197,6 +203,30 @@ def main():
         days = (final['datetime'] - initial['datetime']).days
         if days > 0:
             print(f"  平均每天交易: {trade_count/days:.2f}次")
+            avg_hold_hours = days * 24 / trade_count if trade_count > 0 else 0
+            print(f"  平均持仓时间: {avg_hold_hours:.1f}小时")
+
+    # 分析交易盈亏分布
+    if len(balance_changes) > 0:
+        print(f"\n{'='*20} 交易详情分析 {'='*20}")
+        winning_trades = 0
+        losing_trades = 0
+
+        for i, trade in enumerate(balance_changes):
+            # 简单判断：如果桥接币价值增加，视为盈利交易
+            if i > 0:
+                prev_value = balance_changes[i-1]['bridge_value']
+                curr_value = trade['bridge_value']
+                if curr_value > prev_value:
+                    winning_trades += 1
+                elif curr_value < prev_value:
+                    losing_trades += 1
+
+        if winning_trades + losing_trades > 0:
+            win_rate = winning_trades / (winning_trades + losing_trades) * 100
+            print(f"  盈利交易: {winning_trades}次")
+            print(f"  亏损交易: {losing_trades}次")
+            print(f"  胜率: {win_rate:.1f}%")
 
     if initial_btc > 0 and final_btc > 0:
         print(f"\n{'='*20} BTC计价收益 {'='*20}")

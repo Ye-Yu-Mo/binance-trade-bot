@@ -257,6 +257,31 @@ class Database:
             os.rename(".current_coin_table", ".current_coin_table.old")
             self.logger.info(".current_coin_table renamed to .current_coin_table.old - " "You can now delete this file")
 
+    # PositionState CRUD operations (for ATR trailing strategy)
+    def get_position_state(self, symbol: str) -> Optional[PositionState]:
+        """获取指定币种的仓位状态"""
+        session: Session
+        with self.db_session() as session:
+            st = session.query(PositionState).filter(PositionState.symbol == symbol).first()
+            if st:
+                session.expunge(st)
+            return st
+
+    def save_position_state(self, position: PositionState):
+        """保存或更新仓位状态"""
+        session: Session
+        with self.db_session() as session:
+            # merge 会自动处理 insert 或 update
+            session.merge(position)
+
+    def delete_position_state(self, symbol: str):
+        """删除指定币种的仓位状态"""
+        session: Session
+        with self.db_session() as session:
+            st = session.query(PositionState).filter(PositionState.symbol == symbol).first()
+            if st:
+                session.delete(st)
+
 
 class TradeLog:
     def __init__(self, db: Database, from_coin: Coin, to_coin: Coin, selling: bool):
