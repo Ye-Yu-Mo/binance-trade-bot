@@ -33,6 +33,8 @@ def main():
 
     # 配置回测参数
     config = Config()
+    # 回测时强制使用新策略，避免污染全局配置
+    config.STRATEGY = "atr_trailing"
 
     # 确保DOGE在支持列表中
     if 'DOGE' not in config.SUPPORTED_COIN_LIST:

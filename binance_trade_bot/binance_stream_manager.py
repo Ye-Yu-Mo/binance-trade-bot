@@ -20,6 +20,7 @@ class BinanceOrder:  # pylint: disable=too-few-public-methods
         self.order_type = report["order_type"]
         self.id = report["order_id"]
         self.cumulative_quote_qty = float(report["cumulative_quote_asset_transacted_quantity"])
+        self.cumulative_filled_qty = float(report.get("cumulative_filled_quantity", 0))  # 成交数量
         self.status = report["current_order_status"]
         self.price = float(report["order_price"])
         self.time = report["transaction_time"]
@@ -124,6 +125,7 @@ class BinanceStreamManager:
                 "order_type": order["type"],
                 "order_id": order["orderId"],
                 "cumulative_quote_asset_transacted_quantity": float(order["cummulativeQuoteQty"]),
+                "cumulative_filled_quantity": float(order.get("executedQty", 0)),  # 成交数量
                 "current_order_status": order["status"],
                 "order_price": float(order["price"]),
                 "transaction_time": order["time"],
