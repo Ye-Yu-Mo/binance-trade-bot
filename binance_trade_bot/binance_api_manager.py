@@ -17,11 +17,23 @@ from .models import Coin
 class BinanceAPIManager:
     def __init__(self, config: Config, db: Database, logger: Logger, testnet = False):
         # initializing the client class calls `ping` API endpoint, verifying the connection
+
+        # Setup proxy if configured
+        requests_params = {}
+        if config.PROXY:
+            proxies = {
+                'http': config.PROXY,
+                'https': config.PROXY,
+            }
+            requests_params['proxies'] = proxies
+            logger.info(f"Using proxy: {config.PROXY}")
+
         self.binance_client = Client(
             config.BINANCE_API_KEY,
             config.BINANCE_API_SECRET_KEY,
             tld=config.BINANCE_TLD,
             testnet=testnet,
+            requests_params=requests_params if requests_params else None,
         )
         self.db = db
         self.logger = logger

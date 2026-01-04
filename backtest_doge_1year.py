@@ -40,8 +40,8 @@ def main():
         config.SUPPORTED_COIN_LIST.append('DOGE')
 
     # 设置回测时间范围（使用UTC时间，对齐到分钟）
-    end_date = datetime.utcnow().replace(second=0, microsecond=0)
-    start_date = (end_date - timedelta(days=365)).replace(second=0, microsecond=0)
+    start_date = datetime(2025, 1, 1, 0, 0, 0)  # 2025年1月1日
+    end_date = datetime(2026, 1, 3, 23, 59, 0)  # 2026年1月3日
 
     print(f"\n[配置信息]")
     print(f"  回测币种: DOGE")
@@ -69,13 +69,24 @@ def main():
         for manager in backtest(
             start_date,
             end_date,
-            starting_coin='DOGE',  # 指定从DOGE开始
+            interval=15,         # 每15分钟执行一次（更接近实际）
+            yield_interval=50,   # 每50次迭代输出一次进度
+            start_balances={'USDT': 100},  # 初始100 USDT
+            starting_coin='DOGE',
             config=config
         ):
             iteration_count += 1
 
             # 计算BTC和桥接币价值
-            btc_value = manager.collate_coins("BTC")
+            try:
+                btc_value = manager.collate_coins("BTC")
+            except Exception as e:
+                # 某些币种可能没有BTC交易对（如BTTC），跳过BTC价值计算
+                btc_value = 0
+                if iteration_count == 1:
+                    print(f"[警告] 无法计算BTC价值: {e}")
+                    print("      将只显示{0}价值\n".format(config.BRIDGE.symbol))
+
             bridge_value = manager.collate_coins(config.BRIDGE.symbol)
             current_balances = manager.balances.copy()
 
@@ -102,16 +113,18 @@ def main():
             # 每100次迭代显示一次进度
             if iteration_count % 100 == 0:
                 if len(history) > 1:
-                    btc_diff = ((btc_value - history[0]['btc_value']) /
-                               history[0]['btc_value'] * 100)
                     bridge_diff = ((bridge_value - history[0]['bridge_value']) /
                                   history[0]['bridge_value'] * 100)
 
-                    print(f"[进度 {iteration_count:4d}] "
-                          f"{manager.datetime.strftime('%Y-%m-%d %H:%M')} | "
-                          f"BTC: {format_percentage(btc_diff, 2)} | "
-                          f"{config.BRIDGE.symbol}: {format_percentage(bridge_diff, 2)} | "
-                          f"交易: {trade_count}次")
+                    progress_msg = f"[进度 {iteration_count:4d}] {manager.datetime.strftime('%Y-%m-%d %H:%M')} | "
+
+                    if history[0]['btc_value'] > 0 and btc_value > 0:
+                        btc_diff = ((btc_value - history[0]['btc_value']) /
+                                   history[0]['btc_value'] * 100)
+                        progress_msg += f"BTC: {format_percentage(btc_diff, 2)} | "
+
+                    progress_msg += f"{config.BRIDGE.symbol}: {format_percentage(bridge_diff, 2)} | 交易: {trade_count}次"
+                    print(progress_msg)
 
     except KeyboardInterrupt:
         print("\n\n[中断] 用户终止回测")
@@ -183,12 +196,16 @@ def main():
         if days > 0:
             print(f"  平均每天交易: {trade_count/days:.2f}次")
 
-    print(f"\n{'='*20} BTC计价收益 {'='*20}")
-    print(f"  初始BTC价值: {format_crypto(initial_btc, 8)}")
-    print(f"  最终BTC价值: {format_crypto(final_btc, 8)}")
-    print(f"  绝对收益: {format_crypto(final_btc - initial_btc, 8)} BTC")
-    print(f"  收益率: {format_percentage(btc_return, 2)}")
-    print(f"  最大回撤: {format_percentage(max_drawdown_btc, 2)}")
+    if initial_btc > 0 and final_btc > 0:
+        print(f"\n{'='*20} BTC计价收益 {'='*20}")
+        print(f"  初始BTC价值: {format_crypto(initial_btc, 8)}")
+        print(f"  最终BTC价值: {format_crypto(final_btc, 8)}")
+        print(f"  绝对收益: {format_crypto(final_btc - initial_btc, 8)} BTC")
+        print(f"  收益率: {format_percentage(btc_return, 2)}")
+        print(f"  最大回撤: {format_percentage(max_drawdown_btc, 2)}")
+    else:
+        print(f"\n{'='*20} BTC计价收益 {'='*20}")
+        print(f"  [跳过] 部分币种无BTC交易对，无法计算")
 
     print(f"\n{'='*20} {config.BRIDGE.symbol}计价收益 {'='*20}")
     print(f"  初始{config.BRIDGE.symbol}价值: {format_crypto(initial_bridge, 2)}")
@@ -225,7 +242,7 @@ def main():
                     diff = to_amt - from_amt
                     print(f"      {coin}: {format_crypto(from_amt, 8)} → "
                           f"{format_crypto(to_amt, 8)} "
-                          f"({format_crypto(diff, 8):+})")
+                          f"({diff:+.8f})")
 
     # 性能评估
     print(f"\n{'='*20} 性能评估 {'='*20}")

@@ -24,6 +24,7 @@ class Config:  # pylint: disable=too-few-public-methods,too-many-instance-attrib
             "sell_timeout": "0",
             "buy_timeout": "0",
             "testnet": False,
+            "proxy": "",
         }
 
         if not os.path.exists(CFG_FL_NAME):
@@ -77,3 +78,6 @@ class Config:  # pylint: disable=too-few-public-methods,too-many-instance-attrib
 
         self.USE_MARGIN = os.environ.get("USE_MARGIN") or config.get(USER_CFG_SECTION, "use_margin")
         self.SCOUT_MARGIN = float(os.environ.get("SCOUT_MARGIN") or config.get(USER_CFG_SECTION, "scout_margin"))
+
+        # Proxy settings
+        self.PROXY = os.environ.get("PROXY") or config.get(USER_CFG_SECTION, "proxy")
