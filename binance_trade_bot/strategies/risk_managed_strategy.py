@@ -55,9 +55,9 @@ class Strategy(AutoTrader):
                 f"入场价 {entry_price:.8f}, 当前价 {current_price:.8f}"
             )
             # 止盈后执行正常的跳转逻辑，寻找更好的币种
-            best_coin_found = self._jump_to_best_coin(current_coin, current_price)
-            if best_coin_found:
-                del self.entry_prices[current_coin.symbol]
+            self._jump_to_best_coin(current_coin, current_price)
+            # 删除入场价，重置风险管理基准（即使跳转失败，也避免无限循环）
+            self.entry_prices.pop(current_coin.symbol, None)
             return
 
         # 正常侦察（只有在未触发止损/止盈时才执行）
@@ -65,11 +65,14 @@ class Strategy(AutoTrader):
 
     def transaction_through_bridge(self, pair):
         """
-        重写交易方法，记录新的入场价格
+        重写交易方法，清理旧币并记录新币的入场价格
         """
         result = super().transaction_through_bridge(pair)
 
         if result is not None:
+            # 删除旧币种的入场价格（币种切换成功）
+            self.entry_prices.pop(pair.from_coin.symbol, None)
+
             # 记录新币种的入场价格
             new_coin_pair = pair.to_coin + self.config.BRIDGE
             new_price = self.manager.get_ticker_price(new_coin_pair)
