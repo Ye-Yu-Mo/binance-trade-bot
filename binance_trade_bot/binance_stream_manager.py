@@ -79,6 +79,15 @@ class BinanceStreamManager:
         exchange_name = f"binance.{config.BINANCE_TLD}"
         if config.TESTNET:
             exchange_name += "-testnet"
+
+        # WebSocket library reads proxy from environment variables
+        # Ensure they are set if proxy is configured
+        if config.PROXY:
+            import os
+            os.environ['http_proxy'] = config.PROXY
+            os.environ['https_proxy'] = config.PROXY
+            logger.info(f"Set proxy environment for WebSocket: {config.PROXY}")
+
         self.bw_api_manager = BinanceWebSocketApiManager(
             output_default="UnicornFy",
             enable_stream_signal_buffer=True,
