@@ -45,7 +45,7 @@ echo -e "${GREEN}✓ Clash 运行中${NC}\n"
 # 2. 获取并筛选节点
 echo -e "${YELLOW}[2/5] 获取可用节点...${NC}"
 
-ALL_NODES=$(curl -s "$CLASH_API/proxies/$PROXY_GROUP" | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | grep -v "^$PROXY_GROUP$")
+ALL_NODES=$(curl -s "$CLASH_API/proxies/$PROXY_GROUP" | grep -oP '"all":\[\K[^\]]+' | tr ',' '\n' | sed 's/"//g' | grep -vE "^自动选择$|^剩余流量|^套餐到期")
 
 if [ -z "$ALL_NODES" ]; then
     echo -e "${RED}✗ 无法获取节点列表${NC}"

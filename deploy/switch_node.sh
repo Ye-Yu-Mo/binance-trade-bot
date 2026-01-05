@@ -35,7 +35,7 @@ echo -e "当前节点: ${YELLOW}$CURRENT${NC}\n"
 
 # 获取所有可用节点
 echo "正在获取可用节点列表..."
-NODES=$(curl -s "$CLASH_API/proxies/$PROXY_GROUP" | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | grep -v "^$PROXY_GROUP$")
+NODES=$(curl -s "$CLASH_API/proxies/$PROXY_GROUP" | grep -oP '"all":\[\K[^\]]+' | tr ',' '\n' | sed 's/"//g' | grep -vE "^自动选择$|^剩余流量|^套餐到期")
 
 if [ -z "$NODES" ]; then
     echo -e "${RED}✗ 无法获取节点列表${NC}"
