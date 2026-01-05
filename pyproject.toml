@@ -22,4 +22,5 @@ dependencies = [
     "itsdangerous==2.1.2",
     "Werkzeug==2.3.7",
     "tqdm>=4.67.1",
+    "numpy>=2.2.6",
 ]

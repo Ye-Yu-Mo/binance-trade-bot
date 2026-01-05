@@ -33,8 +33,8 @@ def main():
 
     # 配置回测参数
     config = Config()
-    # 回测时强制使用新策略，避免污染全局配置
-    # config.STRATEGY = "atr_trailing"
+    # 使用横截面趋势锁定策略
+    config.STRATEGY = "cross_sectional"
 
     # 确保DOGE在支持列表中
     if 'DOGE' not in config.SUPPORTED_COIN_LIST:
@@ -42,7 +42,7 @@ def main():
         config.SUPPORTED_COIN_LIST.append('DOGE')
 
     # 设置回测时间范围（使用UTC时间，对齐到分钟）
-    start_date = datetime(2025, 1, 1, 0, 0, 0)  # 2025年1月1日
+    start_date = datetime(2024, 1, 1, 0, 0, 0)  # 2025年1月1日
     end_date = datetime(2026, 1, 3, 23, 59, 0)  # 2026年1月3日
 
     print(f"\n[配置信息]")
@@ -62,11 +62,9 @@ def main():
     balance_changes = []
     last_balances = None
 
-    # 新增：详细交易记录
-    trade_details = []
-    stop_loss_count = 0
-    take_profit_count = 0
-    other_trades = 0
+    # 修复：正确的交易记录数据结构
+    trades = []  # 每笔交易：{'entry_value': float, 'exit_value': float, 'pnl': float}
+    last_trade_value = None  # 上次交易时的总价值
 
     print("\n[开始回测] 正在加载历史数据...")
     print("(首次运行需要下载数据，可能需要几分钟...)\n")
@@ -98,10 +96,30 @@ def main():
             bridge_value = manager.collate_coins(config.BRIDGE.symbol)
             current_balances = manager.balances.copy()
 
-            # 检测交易（余额变化）
+            # 修复：正确的交易检测和记录
             if last_balances is not None and last_balances != current_balances:
                 trade_count += 1
-                # 记录余额变化
+
+                # 记录交易盈亏
+                if last_trade_value is not None:
+                    # 这是一笔完整的交易（入场 → 出场）
+                    pnl = bridge_value - last_trade_value
+                    pnl_pct = (pnl / last_trade_value * 100) if last_trade_value > 0 else 0
+
+                    trades.append({
+                        'time': manager.datetime,
+                        'entry_value': last_trade_value,
+                        'exit_value': bridge_value,
+                        'pnl': pnl,
+                        'pnl_pct': pnl_pct,
+                        'from_balances': last_balances,
+                        'to_balances': current_balances,
+                    })
+
+                # 更新入场价值为当前价值（为下次交易准备）
+                last_trade_value = bridge_value
+
+                # 保留原有的 balance_changes（用于显示最近交易）
                 balance_changes.append({
                     'time': manager.datetime,
                     'from': last_balances,
@@ -109,6 +127,9 @@ def main():
                     'btc_value': btc_value,
                     'bridge_value': bridge_value
                 })
+            elif last_balances is None:
+                # 第一次记录，设置初始入场价值
+                last_trade_value = bridge_value
 
             last_balances = current_balances
             history.append({
@@ -206,27 +227,45 @@ def main():
             avg_hold_hours = days * 24 / trade_count if trade_count > 0 else 0
             print(f"  平均持仓时间: {avg_hold_hours:.1f}小时")
 
-    # 分析交易盈亏分布
-    if len(balance_changes) > 0:
+    # 修复：正确的交易盈亏分析
+    if len(trades) > 0:
         print(f"\n{'='*20} 交易详情分析 {'='*20}")
-        winning_trades = 0
-        losing_trades = 0
 
-        for i, trade in enumerate(balance_changes):
-            # 简单判断：如果桥接币价值增加，视为盈利交易
-            if i > 0:
-                prev_value = balance_changes[i-1]['bridge_value']
-                curr_value = trade['bridge_value']
-                if curr_value > prev_value:
-                    winning_trades += 1
-                elif curr_value < prev_value:
-                    losing_trades += 1
+        winning_trades = [t for t in trades if t['pnl'] > 0]
+        losing_trades = [t for t in trades if t['pnl'] < 0]
+        breakeven_trades = [t for t in trades if t['pnl'] == 0]
 
-        if winning_trades + losing_trades > 0:
-            win_rate = winning_trades / (winning_trades + losing_trades) * 100
-            print(f"  盈利交易: {winning_trades}次")
-            print(f"  亏损交易: {losing_trades}次")
-            print(f"  胜率: {win_rate:.1f}%")
+        win_rate = len(winning_trades) / len(trades) * 100 if trades else 0
+
+        total_profit = sum(t['pnl'] for t in winning_trades)
+        total_loss = sum(abs(t['pnl']) for t in losing_trades)
+        avg_profit = total_profit / len(winning_trades) if winning_trades else 0
+        avg_loss = total_loss / len(losing_trades) if losing_trades else 0
+        profit_factor = total_profit / total_loss if total_loss > 0 else float('inf')
+
+        print(f"  总交易次数: {len(trades)}次")
+        print(f"  盈利交易: {len(winning_trades)}次")
+        print(f"  亏损交易: {len(losing_trades)}次")
+        print(f"  保本交易: {len(breakeven_trades)}次")
+        print(f"  胜率: {win_rate:.1f}%")
+        print(f"\n  平均盈利: {avg_profit:.2f} {config.BRIDGE.symbol} ({avg_profit/initial_bridge*100:.2f}%)")
+        print(f"  平均亏损: {avg_loss:.2f} {config.BRIDGE.symbol} ({avg_loss/initial_bridge*100:.2f}%)")
+
+        if profit_factor != float('inf'):
+            print(f"  盈亏比: {profit_factor:.2f} (总盈利/总亏损)")
+        else:
+            print(f"  盈亏比: ∞ (无亏损交易)")
+
+        # 最大单笔盈利/亏损
+        if winning_trades:
+            max_profit_trade = max(winning_trades, key=lambda t: t['pnl'])
+            print(f"\n  最大单笔盈利: {max_profit_trade['pnl']:.2f} {config.BRIDGE.symbol} "
+                  f"({max_profit_trade['pnl_pct']:+.2f}%) @ {max_profit_trade['time'].strftime('%Y-%m-%d %H:%M')}")
+
+        if losing_trades:
+            max_loss_trade = min(losing_trades, key=lambda t: t['pnl'])
+            print(f"  最大单笔亏损: {max_loss_trade['pnl']:.2f} {config.BRIDGE.symbol} "
+                  f"({max_loss_trade['pnl_pct']:+.2f}%) @ {max_loss_trade['time'].strftime('%Y-%m-%d %H:%M')}")
 
     if initial_btc > 0 and final_btc > 0:
         print(f"\n{'='*20} BTC计价收益 {'='*20}")

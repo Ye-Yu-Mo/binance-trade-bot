@@ -14,3 +14,4 @@ apprise.yml
 .DS_Store
 .bot/
 *.ini
+*pkl

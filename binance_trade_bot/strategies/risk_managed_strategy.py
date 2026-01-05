@@ -1,6 +1,5 @@
 """
 风险管理策略 - 带止损和止盈
-基于 策略优化建议.md 的方案4
 """
 from datetime import datetime
 from binance_trade_bot.auto_trader import AutoTrader

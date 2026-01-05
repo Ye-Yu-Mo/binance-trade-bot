@@ -145,6 +145,14 @@ class MockDatabase(Database):
     ):
         pass
 
+    def send_update(self, model):
+        """禁用 SocketIO 通知（回测环境中不需要）"""
+        pass
+
+    def socketio_connect(self):
+        """禁用 SocketIO 连接（回测环境中不需要）"""
+        return False
+
 
 def backtest(
     start_date: datetime = None,
