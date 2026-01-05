@@ -77,13 +77,15 @@ class AutoTrader:
     def initialize_trade_thresholds(self):
         """
         Initialize the buying threshold of all the coins for trading between them
+
+        重要：每次启动都重新初始化所有 ratio，避免使用过期数据导致永远不交易
         """
         session: Session
         with self.db.db_session() as session:
-            for pair in session.query(Pair).filter(Pair.ratio.is_(None)).all():
+            # 移除 Pair.ratio.is_(None) 过滤条件，强制重新初始化所有 ratio
+            for pair in session.query(Pair).all():
                 if not pair.from_coin.enabled or not pair.to_coin.enabled:
                     continue
-                self.logger.info(f"Initializing {pair.from_coin} vs {pair.to_coin}")
 
                 from_coin_price = self.manager.get_ticker_price(pair.from_coin + self.config.BRIDGE)
                 if from_coin_price is None:
@@ -95,7 +97,17 @@ class AutoTrader:
                     self.logger.info(f"Skipping initializing {pair.to_coin + self.config.BRIDGE}, symbol not found")
                     continue
 
+                old_ratio = pair.ratio
                 pair.ratio = from_coin_price / to_coin_price
+
+                if old_ratio is None:
+                    self.logger.info(f"Initializing {pair.from_coin} vs {pair.to_coin}: ratio={pair.ratio:.4f}")
+                else:
+                    change_pct = (pair.ratio - old_ratio) / old_ratio * 100 if old_ratio != 0 else 0
+                    self.logger.info(
+                        f"Resetting {pair.from_coin} vs {pair.to_coin}: "
+                        f"{old_ratio:.4f} → {pair.ratio:.4f} ({change_pct:+.2f}%)"
+                    )
 
     def scout(self):
         """
@@ -136,11 +148,22 @@ class AutoTrader:
                 ) - pair.ratio
 
             # 输出扫描结果
-            profit_pct = ratio_dict[pair] * 100
-            self.logger.info(
-                f"  └─ {pair.to_coin.symbol}: 价格 {optional_coin_price:.8f}, "
-                f"比率 {coin_opt_coin_ratio:.4f}, 预期收益 {profit_pct:+.2f}%"
-            )
+            if self.config.USE_MARGIN == "yes":
+                # margin 模式：ratio_dict[pair] 已经是相对百分比
+                profit_pct = ratio_dict[pair] * 100
+                self.logger.info(
+                    f"  └─ {pair.to_coin.symbol}: 价格 {optional_coin_price:.8f}, "
+                    f"当前比率 {coin_opt_coin_ratio:.4f}, 预期收益 {profit_pct:+.2f}%"
+                )
+            else:
+                # multiplier 模式：ratio_dict[pair] 是绝对差值
+                score = ratio_dict[pair]
+                relative_change = (score / pair.ratio * 100) if pair.ratio != 0 else 0
+                self.logger.info(
+                    f"  └─ {pair.to_coin.symbol}: 价格 {optional_coin_price:.8f}, "
+                    f"比率 {coin_opt_coin_ratio:.4f}/{pair.ratio:.4f}, "
+                    f"评分 {score:+.4f} ({relative_change:+.2f}%)"
+                )
         return ratio_dict
 
     def _jump_to_best_coin(self, coin: Coin, coin_price: float):
@@ -155,11 +178,20 @@ class AutoTrader:
         # if we have any viable options, pick the one with the biggest ratio
         if positive_ratios:
             best_pair = max(positive_ratios, key=positive_ratios.get)
-            best_profit = positive_ratios[best_pair] * 100
-            self.logger.info(
-                f"✅ 决策: 跳转 {coin.symbol} → {best_pair.to_coin.symbol}, "
-                f"预期收益 {best_profit:+.2f}%"
-            )
+            best_score = positive_ratios[best_pair]
+
+            if self.config.USE_MARGIN == "yes":
+                best_profit_pct = best_score * 100
+                self.logger.info(
+                    f"✅ 决策: 跳转 {coin.symbol} → {best_pair.to_coin.symbol}, "
+                    f"预期收益 {best_profit_pct:+.2f}%"
+                )
+            else:
+                relative_change = (best_score / best_pair.ratio * 100) if best_pair.ratio != 0 else 0
+                self.logger.info(
+                    f"✅ 决策: 跳转 {coin.symbol} → {best_pair.to_coin.symbol}, "
+                    f"评分 {best_score:+.4f} ({relative_change:+.2f}%)"
+                )
             self.transaction_through_bridge(best_pair)
         else:
             self.logger.info(
