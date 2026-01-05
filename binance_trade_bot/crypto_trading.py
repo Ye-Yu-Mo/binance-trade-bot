@@ -9,7 +9,7 @@ from .scheduler import SafeScheduler
 from .strategies import get_strategy
 
 
-def main():
+def main(skip_confirm=False):
     logger = Logger()
     logger.info("Starting")
 
@@ -75,14 +75,17 @@ def main():
         print("="*60)
 
         # Confirmation prompt
-        confirmation = input("\n⚠️  确认开始自动交易吗? (输入 'yes' 确认): ").strip().lower()
-        if confirmation != 'yes':
-            logger.info("用户取消启动")
-            print("已取消启动")
-            return
-
-        print("\n✅ 确认完成，开始运行交易策略...\n")
-        logger.info(f"User confirmed. Starting with {bridge_balance:.8f} {config.BRIDGE.symbol}")
+        if skip_confirm:
+            logger.warning(f"Skipped confirmation (--yes flag). Starting with {bridge_balance:.8f} {config.BRIDGE.symbol}")
+            print("\n⚡ 跳过确认，直接启动交易策略...\n")
+        else:
+            confirmation = input("\n⚠️  确认开始自动交易吗? (输入 'yes' 确认): ").strip().lower()
+            if confirmation != 'yes':
+                logger.info("用户取消启动")
+                print("已取消启动")
+                return
+            print("\n✅ 确认完成，开始运行交易策略...\n")
+            logger.info(f"User confirmed. Starting with {bridge_balance:.8f} {config.BRIDGE.symbol}")
 
     except Exception as e:
         logger.warning(f"Could not get account balance: {e}")
