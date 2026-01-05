@@ -34,6 +34,12 @@ class Strategy(AutoTrader):
         # 计算盈亏百分比
         pnl_pct = (current_price - entry_price) / entry_price * 100
 
+        # 输出当前状态
+        self.logger.info(
+            f"🔍 侦察 {current_coin.symbol}: 当前价 {current_price:.8f}, "
+            f"入场价 {entry_price:.8f}, 盈亏 {pnl_pct:+.2f}%"
+        )
+
         # 止损检查
         if pnl_pct <= -self.stop_loss_pct:
             self.logger.info(

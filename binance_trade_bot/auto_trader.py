@@ -134,6 +134,13 @@ class AutoTrader:
                 ratio_dict[pair] = (
                     coin_opt_coin_ratio - transaction_fee * self.config.SCOUT_MULTIPLIER * coin_opt_coin_ratio
                 ) - pair.ratio
+
+            # 输出扫描结果
+            profit_pct = ratio_dict[pair] * 100
+            self.logger.info(
+                f"  └─ {pair.to_coin.symbol}: 价格 {optional_coin_price:.8f}, "
+                f"比率 {coin_opt_coin_ratio:.4f}, 预期收益 {profit_pct:+.2f}%"
+            )
         return ratio_dict
 
     def _jump_to_best_coin(self, coin: Coin, coin_price: float):
@@ -143,13 +150,22 @@ class AutoTrader:
         ratio_dict = self._get_ratios(coin, coin_price)
 
         # keep only ratios bigger than zero
-        ratio_dict = {k: v for k, v in ratio_dict.items() if v > 0}
+        positive_ratios = {k: v for k, v in ratio_dict.items() if v > 0}
 
         # if we have any viable options, pick the one with the biggest ratio
-        if ratio_dict:
-            best_pair = max(ratio_dict, key=ratio_dict.get)
-            self.logger.info(f"Will be jumping from {coin} to {best_pair.to_coin_id}")
+        if positive_ratios:
+            best_pair = max(positive_ratios, key=positive_ratios.get)
+            best_profit = positive_ratios[best_pair] * 100
+            self.logger.info(
+                f"✅ 决策: 跳转 {coin.symbol} → {best_pair.to_coin.symbol}, "
+                f"预期收益 {best_profit:+.2f}%"
+            )
             self.transaction_through_bridge(best_pair)
+        else:
+            self.logger.info(
+                f"⏸️  决策: 持有 {coin.symbol}, 暂无更优选项 "
+                f"(扫描 {len(ratio_dict)} 个币种，均无正收益)"
+            )
 
     def bridge_scout(self):
         """
