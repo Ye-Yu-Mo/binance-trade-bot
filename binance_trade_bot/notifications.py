@@ -5,6 +5,7 @@
 import queue
 import smtplib
 import ssl
+import socket
 import threading
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -49,18 +50,34 @@ class NotificationHandler:
             mode = "STARTTLS" if self.use_tls else "SSL"
             print(f"✓ 邮件通知已启用: {self.receiver_email} ({mode})")
 
+        except smtplib.SMTPAuthenticationError:
+            print(f"邮件通知配置失败: 密码错误（请检查授权码）")
+            self.enabled = False
+        except socket.timeout:
+            print(f"邮件通知配置失败: 连接超时（网络不稳定）")
+            self.enabled = False
+        except smtplib.SMTPServerDisconnected:
+            print(f"邮件通知配置失败: 服务器断开（可能是反垃圾策略）")
+            self.enabled = False
+        except ssl.SSLError as e:
+            print(f"邮件通知配置失败: TLS 错误 - {e}")
+            self.enabled = False
+        except socket.gaierror as e:
+            print(f"邮件通知配置失败: DNS 解析失败 - {e}")
+            self.enabled = False
         except Exception as e:
-            print(f"邮件通知配置失败: {e}")
+            print(f"邮件通知配置失败: {type(e).__name__} - {e}")
             self.enabled = False
 
     def _test_connection(self):
         """测试 SMTP 连接"""
         if self.use_tls:
             # 使用 STARTTLS (通常是端口 587)
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10)
-            server.starttls()
-            server.login(self.sender_email, self.password)
-            server.quit()
+            with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10) as server:
+                server.starttls()
+                server.login(self.sender_email, self.password)
+                # context manager 会自动调用 close()
+                # 不使用 quit()，避免等待服务器响应导致超时
         else:
             # 使用 SSL (通常是端口 465)
             context = ssl.create_default_context()
@@ -106,11 +123,10 @@ class NotificationHandler:
             # 发送
             if self.use_tls:
                 # STARTTLS 模式 - 在 TUN 代理下更稳定
-                server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=15)
-                server.starttls()
-                server.login(self.sender_email, self.password)
-                server.send_message(msg)
-                server.quit()
+                with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=15) as server:
+                    server.starttls()
+                    server.login(self.sender_email, self.password)
+                    server.send_message(msg)
             else:
                 # SSL 模式
                 context = ssl.create_default_context()
