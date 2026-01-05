@@ -31,7 +31,7 @@ class Strategy(AutoTrader):
         if position is None:
             # 首次建仓（机器人重启或新币种）
             entry_price = current_price
-            entry_time = self.manager.datetime
+            entry_time = datetime.now()
 
             position = PositionState(
                 symbol=current_coin.symbol,
@@ -105,7 +105,7 @@ class Strategy(AutoTrader):
 
             # 使用实际成交价格建仓（不是 ticker 价格！）
             entry_price = result.price  # 实际买入成交价
-            entry_time = self.manager.datetime
+            entry_time = datetime.now()
 
             new_position = PositionState(
                 symbol=pair.to_coin.symbol,
@@ -153,7 +153,7 @@ class Strategy(AutoTrader):
             entry_price = self.manager.get_ticker_price(coin_pair)
 
             if entry_price:
-                entry_time = self.manager.datetime
+                entry_time = datetime.now()
                 new_position = PositionState(
                     symbol=new_coin.symbol,
                     entry_price=entry_price,
