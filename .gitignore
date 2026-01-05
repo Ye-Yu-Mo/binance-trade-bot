@@ -13,3 +13,4 @@ crypto_trading.db
 apprise.yml
 .DS_Store
 .bot/
+*.ini
