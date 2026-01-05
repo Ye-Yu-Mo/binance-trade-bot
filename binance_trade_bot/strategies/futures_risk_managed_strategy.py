@@ -38,6 +38,9 @@ class Strategy:
         self.leverage = 3  # 杠杆3x
         self.position_size_pct = 0.30  # 仓位大小：账户余额的30%
 
+        # 心跳计数器 - 每10次scout输出一次状态
+        self._scout_count = 0
+
         self.logger.info(
             f"期货风险管理策略已初始化 - "
             f"止损:{self.stop_loss_pct}%, 止盈:{self.take_profit_pct}%, "
@@ -54,6 +57,16 @@ class Strategy:
         3. 如果空仓，查询信号并决定开仓
         """
         try:
+            # 心跳输出 - 每10秒显示一次状态
+            self._scout_count += 1
+            if self._scout_count % 10 == 0:
+                balance = self.manager.get_usdt_balance()
+                mark_price = self.manager.get_mark_price(self.symbol)
+                self.logger.info(
+                    f"💓 心跳 #{self._scout_count} - "
+                    f"余额: ${balance:.2f}, {self.symbol}: ${mark_price:.2f}"
+                )
+
             # 获取当前所有仓位
             positions = self.manager.get_all_positions()
 

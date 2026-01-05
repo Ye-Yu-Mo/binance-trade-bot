@@ -15,12 +15,16 @@ from binance_trade_bot.config import Config
 from binance_trade_bot.database import Database
 from binance_trade_bot.logger import Logger
 from binance_trade_bot.scheduler import SafeScheduler
-from binance_trade_bot.strategies.futures_risk_managed_strategy import Strategy
+
+# 策略导入
+from binance_trade_bot.strategies.futures_risk_managed_strategy import Strategy as SingleCoinStrategy
+from binance_trade_bot.strategies.futures_multi_coin_strategy import Strategy as MultiCoinStrategy
 
 
 def main():
     # 使用独立的日志文件：logs/futures_trading.log
     logger = Logger(logging_service='futures_trading')
+    logger.Logger.setLevel('DEBUG')  # 显示 DEBUG 日志
     logger.info("🚀 期货模拟盘启动中...")
 
     # 初始化配置和数据库
@@ -72,13 +76,27 @@ def main():
     print("\n✅ 确认完成，开始运行期货策略...\n")
     logger.info(f"用户确认启动 - 余额: {balance:.2f} USDT")
 
-    # 初始化策略
-    strategy = Strategy(manager, db, logger, config)
+    # 选择策略
+    print("请选择策略：")
+    print("  1. 单币种策略 (BTCUSDT, 基础动量)")
+    print("  2. 多币种策略 (BTC/ETH/BNB/SOL/ADA, 智能扫描) [推荐]")
+    strategy_choice = input("\n输入选择 (1 或 2，默认 2): ").strip() or "2"
+
+    if strategy_choice == "1":
+        strategy = SingleCoinStrategy(manager, db, logger, config)
+        logger.info("✅ 使用单币种策略")
+        print("\n✅ 单币种策略 - 交易 BTCUSDT\n")
+    else:
+        strategy = MultiCoinStrategy(manager, db, logger, config)
+        logger.info("✅ 使用多币种策略")
+        print("\n✅ 多币种策略 - 扫描 BTC/ETH/BNB/SOL/ADA\n")
+
     strategy.initialize()
 
     # 设置侦察任务
     scheduler = SafeScheduler(logger)
-    scheduler.every(1).seconds.do(strategy.scout).tag("scout")
+    # 期货策略改为5秒一次，避免API限流
+    scheduler.every(5).seconds.do(strategy.scout).tag("scout")
 
     logger.info("✅ 期货策略已启动")
     print("✅ 期货策略运行中... (按 Ctrl+C 停止)")

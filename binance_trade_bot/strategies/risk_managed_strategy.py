@@ -193,9 +193,16 @@ class Strategy(AutoTrader):
                 )
             self.db.set_current_coin(current_coin_symbol)
 
-            # 如果没有配置初始币种，购买随机选择的币种
-            if self.config.CURRENT_COIN_SYMBOL == "":
-                current_coin = self.db.get_current_coin()
-                self.logger.info(f"Purchasing {current_coin} to begin trading")
-                self.manager.buy_alt(current_coin, self.config.BRIDGE)
-                self.logger.info("Ready to start trading with risk management")
+            # 检查是否真的持有这个币，如果没有就买入
+            current_coin = self.db.get_current_coin()
+            balance = self.manager.get_currency_balance(current_coin.symbol)
+
+            if balance == 0 or balance is None:
+                self.logger.info(f"账户中没有 {current_coin.symbol}，准备购买...")
+                result = self.manager.buy_alt(current_coin, self.config.BRIDGE)
+                if result:
+                    self.logger.info(f"✅ 成功购买 {current_coin.symbol}，准备开始交易")
+                else:
+                    self.logger.error(f"❌ 购买 {current_coin.symbol} 失败！请检查余额和API权限")
+            else:
+                self.logger.info(f"账户中已有 {current_coin.symbol} ({balance:.8f})，跳过购买")
