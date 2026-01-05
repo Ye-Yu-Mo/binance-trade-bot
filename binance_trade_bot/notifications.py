@@ -1,6 +1,6 @@
 """
 邮件通知模块 - 使用标准库 smtplib
-替换 apprise，更简单可靠
+支持 SSL (端口465) 和 STARTTLS (端口587) 两种模式
 """
 import queue
 import smtplib
@@ -35,6 +35,8 @@ class NotificationHandler:
             self.sender_email = config.get('smtp', 'sender')
             self.password = config.get('smtp', 'password')
             self.receiver_email = config.get('smtp', 'receiver')
+            # 新增：支持 STARTTLS 模式
+            self.use_tls = config.getboolean('smtp', 'use_tls', fallback=False)
 
             # 测试连接
             self._test_connection()
@@ -44,7 +46,8 @@ class NotificationHandler:
             self.start_worker()
             self.enabled = True
 
-            print(f"✓ 邮件通知已启用: {self.receiver_email}")
+            mode = "STARTTLS" if self.use_tls else "SSL"
+            print(f"✓ 邮件通知已启用: {self.receiver_email} ({mode})")
 
         except Exception as e:
             print(f"邮件通知配置失败: {e}")
@@ -52,9 +55,17 @@ class NotificationHandler:
 
     def _test_connection(self):
         """测试 SMTP 连接"""
-        context = ssl.create_default_context()
-        with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, context=context, timeout=5) as server:
+        if self.use_tls:
+            # 使用 STARTTLS (通常是端口 587)
+            server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10)
+            server.starttls()
             server.login(self.sender_email, self.password)
+            server.quit()
+        else:
+            # 使用 SSL (通常是端口 465)
+            context = ssl.create_default_context()
+            with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, context=context, timeout=10) as server:
+                server.login(self.sender_email, self.password)
 
     def start_worker(self):
         """启动异步发送线程"""
@@ -84,8 +95,6 @@ class NotificationHandler:
     def _send_email(self, message):
         """实际发送邮件"""
         try:
-            context = ssl.create_default_context()
-
             # 创建邮件
             msg = MIMEMultipart()
             msg['From'] = f"Binance Trade Bot <{self.sender_email}>"
@@ -95,9 +104,19 @@ class NotificationHandler:
             msg.attach(MIMEText(message, 'plain', 'utf-8'))
 
             # 发送
-            with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, context=context, timeout=15) as server:
+            if self.use_tls:
+                # STARTTLS 模式 - 在 TUN 代理下更稳定
+                server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=15)
+                server.starttls()
                 server.login(self.sender_email, self.password)
                 server.send_message(msg)
+                server.quit()
+            else:
+                # SSL 模式
+                context = ssl.create_default_context()
+                with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, context=context, timeout=15) as server:
+                    server.login(self.sender_email, self.password)
+                    server.send_message(msg)
         except Exception as e:
             # 重新抛出异常，让上层处理重试
             raise e
